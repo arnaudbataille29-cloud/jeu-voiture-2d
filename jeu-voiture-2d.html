@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Zoom Rally — Jeu de voiture 2D</title>
+<style>
+  /* ============ MISE EN PAGE GÉNÉRALE ============ */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:#222;
+    font-family:"Trebuchet MS", "Segoe UI", Arial, sans-serif;
+    touch-action:none; -webkit-user-select:none; user-select:none; }
+  #game { position:fixed; inset:0; display:block; }
+
+  /* ============ HUD ============ */
+  #hud { position:fixed; top:0; left:0; right:0; display:none; justify-content:center;
+    gap:6px; flex-wrap:wrap; padding:8px; pointer-events:none; z-index:5; }
+  body.state-play #hud { display:flex; }
+  .chip { background:rgba(20,25,35,.72); color:#fff; border-radius:10px;
+    padding:5px 10px; font-size:14px; font-weight:bold; letter-spacing:.3px;
+    display:flex; align-items:center; gap:5px; }
+  .chip .val { color:#FFD75E; }
+  #hud-tier .val { color:#7CFC9B; }
+
+  #btn-menu { position:fixed; top:8px; right:8px; z-index:6; display:none;
+    background:rgba(20,25,35,.72); color:#fff; border:none; border-radius:10px;
+    padding:6px 12px; font-size:15px; font-weight:bold; cursor:pointer; }
+  body.state-play #btn-menu { display:block; }
+
+  /* ============ BOUTONS TACTILES ============ */
+  .touch { position:fixed; bottom:18px; width:84px; height:84px; border-radius:50%;
+    background:rgba(255,255,255,.22); border:3px solid rgba(255,255,255,.5);
+    color:#fff; font-size:34px; display:none; align-items:center; justify-content:center;
+    z-index:6; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  body.state-play.touch-on .touch { display:flex; }
+  #btn-left { left:18px; }
+  #btn-right { right:18px; }
+
+  /* ============ ÉCRANS ============ */
+  .screen { position:fixed; inset:0; z-index:10; display:none;
+    align-items:center; justify-content:center; overflow:auto; padding:20px; }
+  .screen.show { display:flex; }
+  #menu { background:#274156; }
+  #overlay { background:rgba(15,20,30,.82); }
+  .panel { background:#fff; border-radius:18px; padding:26px 30px; max-width:560px;
+    width:100%; text-align:center; color:#22303F; box-shadow:0 10px 0 rgba(0,0,0,.25); }
+  .panel h1 { font-size:34px; color:#E74C3C; margin-bottom:4px; }
+  .panel h2 { font-size:26px; margin-bottom:10px; }
+  .panel p.sub { color:#5B6B7B; margin-bottom:16px; font-size:14px; }
+  .stars-big { font-size:40px; letter-spacing:6px; color:#F1C40F; margin:6px 0 12px; }
+  .stats { display:flex; justify-content:center; gap:18px; flex-wrap:wrap; margin-bottom:18px; }
+  .stat { background:#EEF3F7; border-radius:12px; padding:10px 16px; min-width:100px; }
+  .stat b { display:block; font-size:22px; color:#22303F; }
+  .stat span { font-size:12px; color:#5B6B7B; }
+  .btnrow { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .btn { border:none; border-radius:12px; padding:12px 22px; font-size:16px; font-weight:bold;
+    cursor:pointer; color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.25); }
+  .btn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+  .btn-green { background:#2ECC71; }
+  .btn-blue  { background:#3498DB; }
+  .btn-gray  { background:#7F8C8D; }
+  .btn-red   { background:#E74C3C; }
+
+  /* ============ GRILLE DES NIVEAUX ============ */
+  #levels { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr));
+    gap:12px; margin:14px 0 14px; }
+  .lvl { border:none; border-radius:14px; padding:14px 8px; cursor:pointer; color:#fff;
+    font-weight:bold; font-size:15px; box-shadow:0 5px 0 rgba(0,0,0,.25); }
+  .lvl .swatch { display:block; width:100%; height:34px; border-radius:8px; margin-bottom:8px; }
+  .lvl .st { display:block; font-size:15px; letter-spacing:2px; color:#FFD75E; margin-top:5px; }
+  .lvl .best { display:block; font-size:11px; opacity:.85; margin-top:2px; font-weight:normal; }
+  .lvl.locked { background:#95A5A6 !important; cursor:not-allowed; opacity:.75; }
+  .help { font-size:12.5px; color:#5B6B7B; line-height:1.7; text-align:left;
+    background:#F6F9FB; border-radius:12px; padding:10px 14px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- Indicateurs permanents -->
+<div id="hud">
+  <div class="chip" id="hud-lives">❤❤❤</div>
+  <div class="chip">🪙 <span class="val" id="hud-coins">0</span><span class="val" id="hud-combo"></span></div>
+  <div class="chip" id="hud-tier">Palier <span class="val" id="hud-tier-v">P0</span></div>
+  <div class="chip">📍 <span class="val" id="hud-dist">0</span> m</div>
+  <div class="chip">⚡ <span class="val" id="hud-speed">0</span> km/h</div>
+  <div class="chip">⏱ <span class="val" id="hud-time">0:00</span></div>
+  <div class="chip">🏆 <span class="val" id="hud-best">0</span></div>
+</div>
+<button id="btn-menu">☰ Menu</button>
+
+<!-- Contrôles tactiles -->
+<div class="touch" id="btn-left">◀</div>
+<div class="touch" id="btn-right">▶</div>
+
+<!-- Écran de sélection de niveau -->
+<div class="screen show" id="menu">
+  <div class="panel">
+    <h1>🚗 ZOOM RALLY</h1>
+    <p class="sub">Collectez des pièces pour augmenter votre vitesse — atteignez la ligne d'arrivée sans vous retourner !</p>
+    <div id="levels"></div>
+    <div class="help">
+      <b>Clavier :</b> → ou D avancer · ← ou A reculer · R recommencer<br>
+      <b>Tactile :</b> boutons ◀ ▶ à l'écran<br>
+      <b>Astuce :</b> reculez pour prendre de l'élan avant une montée ou un saut.
+      Toutes les 10 pièces, votre vitesse maximale augmente d'un palier.
+    </div>
+  </div>
+</div>
+
+<!-- Écran de fin (victoire / défaite) -->
+<div class="screen" id="overlay"><div class="panel" id="overlay-panel"></div></div>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   1. CONFIGURATION GÉNÉRALE
+   ===================================================================== */
+const SEG        = 8;      // pas d'échantillonnage du terrain (px)
+const VIEW_H     = 560;    // hauteur du monde visible (unités monde)
+const GRAVITY    = 1000;   // px/s²
+const ENGINE     = 950;    // accélération moteur px/s²
+const BRAKE      = 1700;   // décélération de freinage px/s²
+const ROLL_FRIC  = 1.1;    // frottement de roulement (proportionnel/s)
+const BASE_MAX   = 430;    // vitesse maximale de base px/s
+const TIER_BOOST = 60;     // gain de vmax par palier de 10 pièces
+const CAR_CLEAR  = 16;     // hauteur du centre de la voiture au-dessus du sol
+const RAMP_BOOST = 1.5;    // amplification du saut de ressaut
+const FLIP_TOL   = 1.92;   // tolérance de retournement (~110°)
+const INVULN_T   = 2.0;    // durée d'invulnérabilité après une perte de vie
+const STEP       = 1/120;  // pas de physique fixe
+
+/* =====================================================================
+   2. UTILITAIRES
+   ===================================================================== */
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const rand  = (a, b) => a + Math.random() * (b - a);
+function normAngle(a) {
+  a = (a + Math.PI) % (2 * Math.PI);
+  if (a < 0) a += 2 * Math.PI;
+  return a - Math.PI;
+}
+function fmtTime(t) {
+  const m = Math.floor(t / 60), s = Math.floor(t % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+/* =====================================================================
+   3. SAUVEGARDE (localStorage)
+   ===================================================================== */
+const SAVE_KEY = 'zoomrally.save.v1';
+let save = { unlocked: 1, best: {} };
+try {
+  const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+  if (s && s.best) save = s;
+} catch (e) { /* stockage indisponible : partie sans sauvegarde */ }
+function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+function bestOf(li) { return save.best[li] || { score: 0, stars: 0 }; }
+
+/* =====================================================================
+   4. DÉFINITION DES NIVEAUX
+   ---------------------------------------------------------------------
+   terrain : suite de segments [type, longueur, ...params]
+     ['flat',  L]            plat
+     ['slope', L, dy]        pente (dy>0 = descente, dy<0 = montée)
+     ['bumps', L, amp, n]    n bosses sinusoïdales
+   objets : rangées de pièces (x, n, écart, hauteur), pièces dorées,
+   ressauts, boue/sable, glace, rochers, spawners de rochers mobiles,
+   plafonds bas. Les hauteurs sont résolues sur le terrain au chargement.
+   ===================================================================== */
+const row = (x, n, gap, dy) => ({ x, n, gap, dy: dy || 40 });
+
+const LEVELS = [
+  { /* ---- Niveau 1 : Tutoriel (plat, descentes douces) ---- */
+    name: '1 · Prairie', pal: {
+      sky:'#8ED6F5', cloud:'#FFFFFF', hill:'#A8DB8F', hill2:'#7EC86E',
+      ground:'#5DBB4A', dark:'#3E8E33', mud:'#7A5230', rock:'#8E9AA6' },
+    par: 22,
+    terrain: [
+      ['flat',1400], ['slope',900,120], ['flat',600], ['bumps',700,22,3],
+      ['flat',700], ['slope',700,-70], ['flat',800], ['slope',800,150],
+      ['flat',900], ['bumps',600,18,2], ['flat',900] ],
+    coins: [ row(500,5,60,40), row(1700,4,70,40), row(3050,5,60,45),
+             row(3900,4,60,40), row(6200,4,60,40), row(6900,4,60,40),
+             row(7800,4,60,45), row(8500,4,60,40) ],
+    golds: [ {x:5460, dy:155} ],
+    ramps: [ {x:5150, w:150, h:85} ],
+    muds:  [ {x:3750, w:220} ],
+    ices:[], rocks:[], spawners:[], ceilings:[]
+  },
+  { /* ---- Niveau 2 : Montées exigeantes ---- */
+    name: '2 · Collines', pal: {
+      sky:'#9ADCF0', cloud:'#FFFFFF', hill:'#8FD07A', hill2:'#63B85A',
+      ground:'#4FAE43', dark:'#357F2C', mud:'#6E4A2E', rock:'#7F8B97' },
+    par: 26,
+    terrain: [
+      ['flat',800], ['slope',900,-160], ['flat',500], ['slope',700,200],
+      ['flat',600], ['slope',800,-180], ['bumps',600,25,3], ['flat',500],
+      ['slope',900,-220], ['flat',700], ['slope',800,260], ['flat',800],
+      ['bumps',500,20,2], ['flat',700] ],
+    coins: [ row(400,4,60,40), row(1900,4,60,40), row(2500,4,60,40),
+             row(3100,4,60,40), row(4450,5,60,45), row(5700,4,60,40),
+             row(6500,4,60,40), row(7900,4,60,40), row(8750,4,60,45) ],
+    golds: [ {x:8470, dy:175} ],
+    ramps: [ {x:8150, w:150, h:90} ],
+    muds:  [ {x:6600, w:200} ],
+    ices:  [],
+    rocks: [ {x:2650, r:18}, {x:9500, r:18} ],
+    spawners:[], ceilings:[]
+  },
+  { /* ---- Niveau 3 : Désert (sable, pièce dorée en fond de descente) ---- */
+    name: '3 · Désert', pal: {
+      sky:'#FFD98E', cloud:'#FFF3D6', hill:'#EDC283', hill2:'#DCA95F',
+      ground:'#E0A458', dark:'#B97F3E', mud:'#C9973F', rock:'#9C7B5B' },
+    par: 28,
+    terrain: [
+      ['flat',700], ['bumps',800,30,4], ['flat',500], ['slope',700,180],
+      ['flat',600], ['slope',600,-150], ['bumps',700,25,3], ['flat',600],
+      ['slope',900,-240], ['flat',600], ['slope',700,200], ['flat',700],
+      ['bumps',600,22,3], ['flat',700] ],
+    coins: [ row(300,4,60,40), row(950,4,60,45), row(1700,4,60,40),
+             row(2900,4,60,40), row(4150,5,60,45), row(4800,4,60,40),
+             row(5600,4,60,40), row(6300,4,60,40), row(7250,4,60,40),
+             row(8400,4,60,45), row(9000,4,60,40) ],
+    golds: [ {x:6080, dy:55}, {x:7870, dy:175} ],
+    ramps: [ {x:7550, w:150, h:95} ],
+    muds:  [ {x:1550, w:250}, {x:5000, w:200}, {x:8750, w:200} ],
+    ices:  [],
+    rocks: [ {x:2200, r:20}, {x:3350, r:18} ],
+    spawners:[], ceilings:[]
+  },
+  { /* ---- Niveau 4 : Glace (dérapage) ---- */
+    name: '4 · Toundra', pal: {
+      sky:'#C8E9FA', cloud:'#FFFFFF', hill:'#BFD8E8', hill2:'#9FC3DC',
+      ground:'#8FB98F', dark:'#5E8A66', mud:'#6E4A2E', rock:'#7C8894' },
+    par: 28,
+    terrain: [
+      ['flat',800], ['slope',600,140], ['flat',500], ['flat',800],
+      ['bumps',600,22,3], ['slope',700,-160], ['flat',700], ['slope',800,-200],
+      ['flat',600], ['bumps',600,25,3], ['flat',600], ['slope',700,180],
+      ['flat',700], ['slope',600,-140], ['flat',800] ],
+    coins: [ row(400,4,60,40), row(1600,4,60,40), row(2950,5,60,45),
+             row(3600,4,60,40), row(4550,4,60,40), row(5800,4,60,40),
+             row(6350,4,60,45), row(6900,4,60,40), row(7600,4,60,40),
+             row(8300,4,60,40) ],
+    golds: [ {x:1400, dy:55}, {x:4370, dy:170} ],
+    ramps: [ {x:4050, w:150, h:90} ],
+    muds:  [ {x:7000, w:200} ],
+    ices:  [ {x:2000, w:500}, {x:5600, w:450}, {x:8100, w:450} ],
+    rocks: [ {x:2450, r:18}, {x:7750, r:20} ],
+    spawners:[], ceilings:[]
+  },
+  { /* ---- Niveau 5 : Montagne enneigée + plafonds bas ---- */
+    name: '5 · Montagne', pal: {
+      sky:'#BFE3FF', cloud:'#FFFFFF', hill:'#DDEBF7', hill2:'#B9D2E8',
+      ground:'#F4F9FF', dark:'#B9CFE4', mud:'#7A5230', rock:'#6E7B8A' },
+    par: 30,
+    terrain: [
+      ['flat',700], ['slope',700,-180], ['flat',600], ['slope',600,160],
+      ['flat',700], ['slope',800,-220], ['flat',800], ['slope',700,-190],
+      ['flat',700], ['bumps',500,20,2], ['flat',700], ['slope',700,200],
+      ['flat',600], ['slope',600,150], ['flat',700] ],
+    coins: [ row(350,4,60,40), row(1600,4,60,40), row(2300,4,60,40),
+             row(3050,4,60,40), row(3700,4,60,40), row(4400,4,60,40),
+             row(5900,4,60,40), row(6450,4,60,45), row(6850,4,60,40),
+             row(7800,4,60,40), row(8500,4,60,40), row(9000,4,60,40) ],
+    golds: [ {x:7420, dy:170} ],
+    ramps: [ {x:7100, w:150, h:90} ],
+    muds:  [ {x:1550, w:200} ],
+    ices:  [ {x:4200, w:500} ],
+    rocks: [ {x:1050, r:18}, {x:8750, r:20} ],
+    spawners:[],
+    ceilings: [ {x:2750, w:240, clear:105}, {x:5800, w:260, clear:100}, {x:8350, w:240, clear:105} ]
+  },
+  { /* ---- Niveau 6 : Volcan (rochers mobiles + tout) ---- */
+    name: '6 · Volcan', pal: {
+      sky:'#3A2F4F', cloud:'#6E5A8E', hill:'#54386B', hill2:'#3E2A52',
+      ground:'#6B4E8C', dark:'#4A3364', mud:'#4E3320', rock:'#C05A4E' },
+    par: 45,
+    terrain: [
+      ['flat',700], ['slope',800,-200], ['flat',600], ['slope',700,180],
+      ['flat',700], ['slope',800,-240], ['flat',700], ['bumps',500,22,2],
+      ['flat',600], ['slope',700,-180], ['flat',700], ['slope',700,200],
+      ['flat',700], ['bumps',500,20,2], ['flat',900] ],
+    coins: [ row(350,4,60,40), row(1700,4,60,40), row(2400,4,60,40),
+             row(3000,4,60,40), row(3900,4,60,40), row(4450,4,60,40),
+             row(5200,4,60,45), row(6000,4,60,40), row(7100,4,60,40),
+             row(7900,4,60,40), row(8500,4,60,40), row(9150,4,60,45) ],
+    golds: [ {x:5060, dy:170} ],
+    ramps: [ {x:4750, w:150, h:95} ],
+    muds:  [ {x:3050, w:220}, {x:7200, w:220} ],
+    ices:  [ {x:8400, w:400} ],
+    rocks: [ {x:900, r:18}, {x:2550, r:18} ],
+    spawners: [
+      { x:1450, dir:-1, interval:3.5, speed:220, range:2200 },
+      { x:4250, dir:-1, interval:3.0, speed:250, range:2200 },
+      { x:6750, dir:-1, interval:3.5, speed:230, range:2200 } ],
+    ceilings: [ {x:5650, w:240, clear:105} ]
+  }
+];
+
+/* =====================================================================
+   5. CONSTRUCTION D'UN NIVEAU (terrain + objets résolus)
+   ===================================================================== */
+function buildTerrain(segs) {
+  let length = 0;
+  for (const s of segs) length += s[1];
+  const n = Math.ceil(length / SEG) + 4;
+  const h = new Float32Array(n);
+  let y = 300, i = 0;
+  for (const s of segs) {
+    const t = s[0], len = s[1];
+    const steps = Math.max(1, Math.round(len / SEG));
+    for (let k = 0; k < steps && i < n; k++, i++) {
+      const p = k / steps;
+      if (t === 'flat')       h[i] = y;
+      else if (t === 'slope') h[i] = y + s[2] * p;
+      else                    h[i] = y + Math.sin(p * Math.PI * 2 * s[3]) * s[2];
+    }
+    if (t === 'slope') y += s[2];
+  }
+  while (i < n) h[i++] = y;
+  for (let pass = 0; pass < 4; pass++) {      // lissage des raccords
+    const c = Float32Array.from(h);
+    for (let j = 1; j < n - 1; j++) h[j] = (c[j-1] + 2*c[j] + c[j+1]) / 4;
+  }
+  return { h, length };
+}
+
+function buildLevel(li) {
+  const d = LEVELS[li];
+  const { h, length } = buildTerrain(d.terrain);
+  const groundAt = x => {
+    const f = clamp(x / SEG, 0, h.length - 2);
+    const i = Math.floor(f);
+    return h[i] + (h[i+1] - h[i]) * (f - i);
+  };
+  const slopeAt = x => (groundAt(x + 10) - groundAt(x - 10)) / 20;
+
+  const lv = {
+    def: d, h, groundAt, slopeAt, length,
+    finishX: length - 300,
+    minY: Infinity, maxY: -Infinity,
+    coins: [], ramps: [], muds: [], ices: [], rocks: [],
+    spawners: [], ceilings: [], totalCoins: 0, collected: 0
+  };
+  for (let i = 0; i < h.length; i++) {
+    lv.minY = Math.min(lv.minY, h[i]);
+    lv.maxY = Math.max(lv.maxY, h[i]);
+  }
+  for (const r of d.coins)
+    for (let k = 0; k < r.n; k++) {
+      const x = r.x + k * r.gap;
+      lv.coins.push({ x, y: groundAt(x) - r.dy, gold: false, taken: false, missed: false });
+      lv.totalCoins++;
+    }
+  for (const g of d.golds) {
+    lv.coins.push({ x: g.x, y: groundAt(g.x) - g.dy, gold: true, taken: false, missed: false });
+    lv.totalCoins += 5;
+  }
+  for (const r of d.ramps)  lv.ramps.push({ x: r.x, w: r.w, h: r.h, gy: groundAt(r.x) });
+  for (const m of d.muds)   lv.muds.push({ x: m.x, w: m.w });
+  for (const i of d.ices)   lv.ices.push({ x: i.x, w: i.w });
+  for (const r of d.rocks)  lv.rocks.push({ x: r.x, r: r.r, y: groundAt(r.x) - r.r, cool: 0 });
+  for (const s of d.spawners)
+    lv.spawners.push({ ...s, timer: s.interval * 0.6, rocks: [] });
+  for (const c of d.ceilings)
+    lv.ceilings.push({ x: c.x, w: c.w, gapY: groundAt(c.x + c.w/2) - c.clear });
+  return lv;
+}
+
+/* =====================================================================
+   6. ÉTAT DE LA PARTIE
+   ===================================================================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = 1, scale = 1, viewW = 0;
+
+const game = {
+  state: 'menu',          // menu | play | over | win
+  li: 0, lv: null,
+  car: null, cam: { x: 0, y: 0 },
+  time: 0, coins: 0, score: 0,
+  streak: 0, mult: 1, tier: 0, maxSpeed: BASE_MAX,
+  lives: 3, shake: 0
+};
+
+function newCar(x) {
+  const lv = game.lv;
+  return { x, y: lv.groundAt(x) - CAR_CLEAR, vx: 0, vy: 0,
+           angle: Math.atan(lv.slopeAt(x)), angVel: 0,
+           onGround: true, onRamp: null, invuln: 0 };
+}
+
+function resetLevel(li) {
+  game.li = li;
+  game.lv = buildLevel(li);
+  game.car = newCar(120);
+  game.cam.x = 0;
+  game.cam.y = game.lv.groundAt(120) - VIEW_H * 0.6;
+  game.time = 0; game.coins = 0; game.score = 0;
+  game.streak = 0; game.mult = 1; game.tier = 0;
+  game.maxSpeed = BASE_MAX; game.lives = 3; game.shake = 0;
+  game.state = 'play';
+  document.getElementById('menu').classList.remove('show');
+  document.getElementById('overlay').classList.remove('show');
+  document.body.className = 'state-play' + (isTouch ? ' touch-on' : '');
+  updateHUD();
+}
+
+/* =====================================================================
+   7. PHYSIQUE (gravité, pente, inertie, glace, boue, ressauts)
+   ===================================================================== */
+const inZone = (list, x) => {
+  for (const z of list) if (x >= z.x && x <= z.x + z.w) return true;
+  return false;
+};
+
+/* Info sol à x : y de surface, pente, éventuel ressaut */
+function groundInfo(x) {
+  const lv = game.lv;
+  let y = lv.groundAt(x), s = lv.slopeAt(x), ramp = null;
+  for (const r of lv.ramps) {
+    if (x >= r.x && x <= r.x + r.w) {
+      const ry = r.gy - r.h * ((x - r.x) / r.w);
+      if (ry < y) { y = ry; s = -r.h / r.w; ramp = r; }
+    }
+  }
+  return { y, s, ramp };
+}
+
+function updateCar(dt) {
+  const c = game.car, lv = game.lv;
+  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (c.invuln > 0) c.invuln -= dt;
+
+  const onIce = inZone(lv.ices, c.x);
+  const onMud = inZone(lv.muds, c.x);
+
+  if (c.onGround) {
+    const gi = groundInfo(c.x);
+    let a = GRAVITY * gi.s / Math.sqrt(1 + gi.s * gi.s);   // gravité projetée sur la pente
+    if (dir !== 0) {
+      if (dir * c.vx >= 0) a += dir * ENGINE * (onIce ? 0.55 : onMud ? 0.35 : 1);
+      else a += dir * BRAKE * (onIce ? 0.35 : 1);          // freinage / marche arrière
+    }
+    const fr = (dir === 0 ? 1 : 0.25) * (onIce ? 0.10 : 1);
+    a -= c.vx * ROLL_FRIC * fr;
+    if (onMud) a -= c.vx * 3.5;                            // la boue freine très fort
+    c.vx += a * dt;
+
+    const over = Math.abs(c.vx) - game.maxSpeed;           // survitesse : traînée progressive
+    if (over > 0) c.vx -= Math.sign(c.vx) * (over * 2.5 + 60) * dt;
+    c.vx = clamp(c.vx, -game.maxSpeed * 0.6, game.maxSpeed * 1.5);  // marche arrière limitée
+
+    const prevX = c.x;
+    c.x += c.vx * dt;
+    const g2 = groundInfo(c.x);
+
+    /* Décollage en bout de ressaut */
+    if (c.onRamp && c.vx > 0 && prevX <= c.onRamp.x + c.onRamp.w && c.x > c.onRamp.x + c.onRamp.w) {
+      const r = c.onRamp;
+      c.onGround = false; c.onRamp = null;
+      c.vy = -c.vx * (r.h / r.w) * RAMP_BOOST;
+      c.angVel = -c.vx * 0.0038;      // rotation : retournement possible à trop grande vitesse
+    } else if (g2.y < c.y - 6) {       /* le sol chute brusquement : envol */
+      c.onGround = false; c.onRamp = g2.ramp;
+      c.vy = c.vx * gi.s;
+      c.angVel = 0;
+    } else {                           /* la voiture suit le terrain */
+      c.y = g2.y - CAR_CLEAR;
+      c.onRamp = g2.ramp;
+      const tAng = Math.atan(g2.s);
+      c.angle += (tAng - c.angle) * Math.min(1, 12 * dt);
+      c.vy = c.vx * g2.s;
+    }
+  } else {
+    /* En l'air : gravité + rotation libre */
+    c.vy += GRAVITY * dt;
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.angle += c.angVel * dt;
+    const gi = groundInfo(c.x);
+    if (c.y >= gi.y - CAR_CLEAR && c.vy >= 0) {            /* atterrissage */
+      const tAng = Math.atan(gi.s);
+      const diff = Math.abs(normAngle(c.angle - tAng));
+      c.y = gi.y - CAR_CLEAR;
+      c.onGround = true; c.onRamp = gi.ramp; c.angVel = 0;
+      if (diff > FLIP_TOL) { loseLife(); return; }         /* retourné : perte de vie */
+      c.angle = tAng;
+      c.vy = 0;
+      c.vx *= 0.96;
+    }
+  }
+
+  if (c.x < 40) { c.x = 40; if (c.vx < 0) c.vx = 0; }
+
+  /* Plafonds bas : bloquer si la voiture s'élève trop */
+  for (const cl of lv.ceilings) {
+    if (c.x > cl.x - 10 && c.x < cl.x + cl.w + 10 && c.y - 24 < cl.gapY) {
+      c.y = cl.gapY + 24;
+      if (c.vy < 0) c.vy = 40;
+      c.vx *= 0.55;
+      game.shake = Math.max(game.shake, 0.15);
+    }
+  }
+}
+
+/* =====================================================================
+   8. OBJETS : pièces, combos, obstacles, spawners, arrivée
+   ===================================================================== */
+function updateObjects(dt) {
+  const c = game.car, lv = game.lv;
+
+  /* Pièces : collecte, ou ratée → combo réinitialisé */
+  for (const cn of lv.coins) {
+    if (cn.taken) continue;
+    const dx = c.x - cn.x, dy = c.y - cn.y;
+    const rad = cn.gold ? 44 : 32;
+    if (dx*dx + dy*dy < rad*rad) {
+      cn.taken = true;
+      const val = cn.gold ? 5 : 1;
+      game.coins += val;
+      lv.collected += val;
+      game.streak++;
+      game.mult = Math.min(5, 1 + Math.floor(game.streak / 5));
+      game.score += (cn.gold ? 50 : 10) * game.mult;
+      game.tier = Math.max(game.tier, Math.floor(game.coins / 10));
+      game.maxSpeed = BASE_MAX + game.tier * TIER_BOOST;
+    } else if (!cn.missed && dx > 50) {
+      cn.missed = true;
+      game.streak = 0; game.mult = 1;
+    }
+  }
+
+  /* Rochers fixes : perte d'une pièce, projection par-dessus */
+  for (const r of lv.rocks) {
+    if (r.cool > 0) r.cool -= dt;
+    const dx = c.x - r.x, dy = c.y - r.y;
+    if (r.cool <= 0 && c.invuln <= 0 && dx*dx + dy*dy < (r.r + 22) * (r.r + 22)) hitFixedRock(r);
+  }
+
+  /* Rochers mobiles : apparition à intervalles, dévalent la pente */
+  for (const sp of lv.spawners) {
+    sp.timer -= dt;
+    if (sp.timer <= 0) {
+      sp.timer = sp.interval;
+      sp.rocks.push({ x: sp.x, r: 16, vx: sp.dir * sp.speed, cool: 0 });
+    }
+    for (let i = sp.rocks.length - 1; i >= 0; i--) {
+      const r = sp.rocks[i];
+      const s = lv.slopeAt(r.x);
+      r.vx += GRAVITY * s / Math.sqrt(1 + s * s) * 0.9 * dt;   // roule selon la pente
+      if (Math.abs(s) < 0.06) r.vx -= r.vx * 2.5 * dt;         // freine sur le plat
+      r.vx = clamp(r.vx, -sp.speed * 1.3, sp.speed * 1.3);
+      r.x += r.vx * dt;
+      r.y = lv.groundAt(r.x) - r.r;
+      if (r.cool > 0) r.cool -= dt;
+      if (Math.abs(r.x - sp.x) > sp.range || Math.abs(r.vx) < 25) { sp.rocks.splice(i, 1); continue; }
+      const dx = c.x - r.x, dy = c.y - r.y;
+      if (r.cool <= 0 && c.invuln <= 0 && dx*dx + dy*dy < (r.r + 22) * (r.r + 22)) hitMovingRock(r);
+    }
+  }
+
+  /* Ligne d'arrivée */
+  if (c.x >= lv.finishX) winLevel();
+}
+
+/* Rocher fixe : la voiture perd une pièce et est projetée en avant */
+function hitFixedRock(r) {
+  const c = game.car;
+  r.cool = 1.2;
+  game.shake = 0.3;
+  if (game.coins > 0) game.coins--;
+  game.streak = 0; game.mult = 1;
+  const fast = Math.abs(c.vx) > 450;    // à grande vitesse : projection plus forte
+  c.onGround = false; c.onRamp = null;
+  c.vy = fast ? -360 : -260;
+  c.angVel = fast ? 1.1 : 0.5;          // tangage nez en bas : atterrissage sûr
+  c.vx *= 0.4;
+}
+
+/* Rocher mobile : la voiture est projetée dans le sens du choc */
+function hitMovingRock(r) {
+  const c = game.car;
+  r.cool = 1;
+  game.shake = 0.35;
+  if (game.coins > 0) game.coins--;
+  game.streak = 0; game.mult = 1;
+  c.onGround = false; c.onRamp = null;
+  c.vy = -330;
+  c.vx = Math.sign(r.vx || 1) * 260;
+  c.angVel = (r.vx > 0 ? -1 : 1) * 1.2;
+}
+
+function loseLife() {
+  game.lives--;
+  game.shake = 0.4;
+  if (game.lives <= 0) { gameOver(); return; }
+  /* Réinitialisation un peu avant l'obstacle, avec invulnérabilité */
+  const x = Math.max(60, game.car.x - 220);
+  game.car = newCar(x);
+  game.car.invuln = INVULN_T;
+  for (const sp of game.lv.spawners) sp.rocks.length = 0;
+}
+
+/* =====================================================================
+   9. FIN DE NIVEAU / FIN DE PARTIE / ÉTOILES
+   ===================================================================== */
+function starsFor(lv) {
+  let s = 1;
+  if (lv.collected >= 0.6 * lv.totalCoins) s++;
+  if (game.time <= lv.def.par) s++;
+  return s;
+}
+
+function winLevel() {
+  const lv = game.lv, li = game.li;
+  const stars = starsFor(lv);
+  const b = bestOf(li);
+  save.best[li] = {
+    score: Math.max(b.score, game.score),
+    stars: Math.max(b.stars, stars)
+  };
+  save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, li + 2));
+  persist();
+  game.state = 'win';
+  const panel = document.getElementById('overlay-panel');
+  const gold = '★'.repeat(stars) + '<span style="color:#ccc">' + '★'.repeat(3 - stars) + '</span>';
+  const hasNext = li + 1 < LEVELS.length;
+  panel.innerHTML =
+    '<h2>🏁 Niveau terminé !</h2>' +
+    '<div class="stars-big">' + gold + '</div>' +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + game.score + '</b><span>Score</span></div>' +
+      '<div class="stat"><b>' + lv.collected + '</b><span>Pièces</span></div>' +
+      '<div class="stat"><b>' + fmtTime(game.time) + '</b><span>Temps (réf. ' + fmtTime(lv.def.par) + ')</span></div>' +
+      '<div class="stat"><b>' + save.best[li].score + '</b><span>Record</span></div>' +
+    '</div>' +
+    '<div class="btnrow">' +
+      '<button class="btn btn-green" data-act="retry">↻ Rejouer (R)</button>' +
+      (hasNext ? '<button class="btn btn-blue" data-act="next">Niveau suivant ▶</button>' : '') +
+      '<button class="btn btn-gray" data-act="menu">☰ Menu</button>' +
+    '</div>';
+  document.getElementById('overlay').classList.add('show');
+  document.body.className = '';
+}
+
+function gameOver() {
+  const li = game.li, b = bestOf(li);
+  save.best[li] = { score: Math.max(b.score, game.score), stars: b.stars };
+  persist();
+  game.state = 'over';
+  const panel = document.getElementById('overlay-panel');
+  panel.innerHTML =
+    '<h2>💥 Perdu !</h2>' +
+    '<p class="sub">Vos trois vies ont été utilisées.</p>' +
+    '<div class="stats">' +
+      '<div class="stat"><b>' + game.score + '</b><span>Score</span></div>' +
+      '<div class="stat"><b>' + game.coins + '</b><span>Pièces</span></div>' +
+      '<div class="stat"><b>' + Math.max(0, Math.round((game.car.x - 120) / 20)) + ' m</b><span>Distance</span></div>' +
+      '<div class="stat"><b>' + save.best[li].score + '</b><span>Record</span></div>' +
+    '</div>' +
+    '<div class="btnrow">' +
+      '<button class="btn btn-red" data-act="retry">↻ Rejouer (R)</button>' +
+      '<button class="btn btn-gray" data-act="menu">☰ Menu</button>' +
+    '</div>';
+  document.getElementById('overlay').classList.add('show');
+  document.body.className = '';
+}
+
+/* =====================================================================
+   10. RENDU (canvas, flat design)
+   ===================================================================== */
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  scale = H / VIEW_H;
+  viewW = W / scale;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function render() {
+  const lv = game.lv, pal = lv ? lv.def.pal : LEVELS[0].pal;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  /* Ciel */
+  ctx.fillStyle = pal.sky;
+  ctx.fillRect(0, 0, W, H);
+
+  /* Nuages (parallaxe lente) */
+  ctx.fillStyle = pal.cloud;
+  for (let i = 0; i < 6; i++) {
+    const cx = ((i * 700 + 200 - (game.cam ? game.cam.x : 0) * 0.15) % (W + 400) + (W + 400)) % (W + 400) - 200;
+    const cy = 40 + (i % 3) * 55;
+    roundRect(cx, cy, 110, 26, 13); ctx.fill();
+    roundRect(cx + 24, cy - 16, 70, 24, 12); ctx.fill();
+  }
+
+  /* Collines de parallaxe (deux plans) */
+  drawHills(pal.hill2, 0.25, H * 0.52, 90, 0.004);
+  drawHills(pal.hill,  0.45, H * 0.62, 60, 0.007);
+
+  if (!lv || !game.car) return;
+
+  /* Secousse d'impact */
+  const shakeX = game.shake > 0 ? rand(-1, 1) * game.shake * 10 : 0;
+  const shakeY = game.shake > 0 ? rand(-1, 1) * game.shake * 10 : 0;
+  if (game.shake > 0) game.shake = Math.max(0, game.shake - 1/60);
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+  ctx.scale(scale, scale);
+  ctx.translate(-game.cam.x, -game.cam.y);
+
+  const x0 = game.cam.x - 40, x1 = game.cam.x + viewW + 40;
+
+  /* Terrain */
+  ctx.beginPath();
+  ctx.moveTo(x0, lv.groundAt(x0));
+  for (let x = x0; x <= x1; x += SEG * 2) ctx.lineTo(x, lv.groundAt(x));
+  ctx.lineTo(x1, game.cam.y + VIEW_H + 200);
+  ctx.lineTo(x0, game.cam.y + VIEW_H + 200);
+  ctx.closePath();
+  ctx.fillStyle = pal.ground;
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = pal.dark;
+  ctx.beginPath();
+  ctx.moveTo(x0, lv.groundAt(x0));
+  for (let x = x0; x <= x1; x += SEG * 2) ctx.lineTo(x, lv.groundAt(x));
+  ctx.stroke();
+
+  /* Zones de glace */
+  ctx.lineWidth = 14;
+  ctx.strokeStyle = '#BDEBFF';
+  for (const z of lv.ices) {
+    if (z.x + z.w < x0 || z.x > x1) continue;
+    ctx.beginPath();
+    ctx.moveTo(z.x, lv.groundAt(z.x) - 2);
+    for (let x = z.x; x <= z.x + z.w; x += SEG * 2) ctx.lineTo(x, lv.groundAt(x) - 2);
+    ctx.stroke();
+  }
+
+  /* Zones de boue / sable */
+  ctx.fillStyle = pal.mud;
+  for (const z of lv.muds) {
+    if (z.x + z.w < x0 || z.x > x1) continue;
+    ctx.beginPath();
+    ctx.moveTo(z.x, lv.groundAt(z.x) - 4);
+    for (let x = z.x; x <= z.x + z.w; x += SEG * 2) ctx.lineTo(x, lv.groundAt(x) - 4);
+    for (let x = z.x + z.w; x >= z.x; x -= SEG * 2) ctx.lineTo(x, lv.groundAt(x) + 14);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /* Ressauts */
+  ctx.fillStyle = '#E67E22';
+  for (const r of lv.ramps) {
+    if (r.x + r.w < x0 || r.x > x1) continue;
+    ctx.beginPath();
+    ctx.moveTo(r.x, r.gy + 4);
+    ctx.lineTo(r.x + r.w, r.gy - r.h);
+    ctx.lineTo(r.x + r.w, r.gy + 4);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /* Plafonds bas */
+  for (const cl of lv.ceilings) {
+    if (cl.x + cl.w < x0 || cl.x > x1) continue;
+    ctx.fillStyle = '#46586B';
+    ctx.fillRect(cl.x, cl.gapY - 800, cl.w, 800);
+    ctx.fillStyle = '#F1C40F';
+    for (let sx = cl.x; sx < cl.x + cl.w - 12; sx += 24)
+      ctx.fillRect(sx, cl.gapY - 12, 12, 12);
+  }
+
+  /* Ligne d'arrivée */
+  const fx = lv.finishX;
+  if (fx > x0 - 100 && fx < x1 + 100) {
+    ctx.fillStyle = '#22303F';
+    ctx.fillRect(fx - 4, lv.groundAt(fx) - 170, 8, 170);
+    for (let r = 0; r < 2; r++)
+      for (let k = 0; k < 5; k++) {
+        ctx.fillStyle = (r + k) % 2 ? '#22303F' : '#FFFFFF';
+        ctx.fillRect(fx + 4 + k * 16, lv.groundAt(fx) - 170 + r * 16, 16, 16);
+      }
+    ctx.fillStyle = '#E74C3C';
+    ctx.fillRect(fx - 60, lv.groundAt(fx) - 210, 130, 30);
+  }
+
+  /* Pièces */
+  const t = performance.now() / 1000;
+  for (const cn of lv.coins) {
+    if (cn.taken || cn.x < x0 - 40 || cn.x > x1 + 40) continue;
+    const bob = Math.sin(t * 4 + cn.x * 0.05) * 4;
+    if (cn.gold) {
+      ctx.fillStyle = '#FFD75E';
+      ctx.beginPath(); ctx.arc(cn.x, cn.y + bob, 16, 0, 7); ctx.fill();
+      ctx.fillStyle = '#B8860B';
+      ctx.beginPath(); ctx.arc(cn.x, cn.y + bob, 9, 0, 7); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';                       // scintillement
+      const a = t * 3 + cn.x;
+      ctx.beginPath();
+      ctx.arc(cn.x + Math.cos(a) * 12, cn.y + bob + Math.sin(a) * 12, 3, 0, 7);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#F5C542';
+      ctx.beginPath(); ctx.arc(cn.x, cn.y + bob, 11, 0, 7); ctx.fill();
+      ctx.fillStyle = '#C79A2A';
+      ctx.beginPath(); ctx.arc(cn.x, cn.y + bob, 6, 0, 7); ctx.fill();
+    }
+  }
+
+  /* Rochers fixes et mobiles */
+  for (const r of lv.rocks) {
+    if (r.x < x0 - 40 || r.x > x1 + 40) continue;
+    drawRock(r.x, r.y, r.r, pal.rock);
+  }
+  for (const sp of lv.spawners)
+    for (const r of sp.rocks) drawRock(r.x, r.y, r.r, '#C0392B');
+
+  /* Voiture */
+  drawCar(game.car, t);
+
+  ctx.restore();
+}
+
+function drawHills(color, par, base, amp, freq) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  const off = (game.cam ? game.cam.x : 0) * par;
+  for (let sx = 0; sx <= W; sx += 24) {
+    const wx = off + sx / scale;
+    ctx.lineTo(sx, base + Math.sin(wx * freq) * amp + Math.sin(wx * freq * 2.7) * amp * 0.4);
+  }
+  ctx.lineTo(W, H);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRock(x, y, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x - r, y + r * 0.6);
+  ctx.lineTo(x - r * 0.6, y - r * 0.8);
+  ctx.lineTo(x + r * 0.5, y - r);
+  ctx.lineTo(x + r, y + r * 0.6);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawCar(c, t) {
+  if (c.invuln > 0 && Math.floor(t * 10) % 2 === 0) return;  // clignote (invulnérable)
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.rotate(c.angle);
+  ctx.fillStyle = '#2B2B2B';                       // roues
+  ctx.beginPath(); ctx.arc(-15, 9, 9, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(15, 9, 9, 0, 7); ctx.fill();
+  ctx.fillStyle = '#BDC3C7';
+  ctx.beginPath(); ctx.arc(-15, 9, 4, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.arc(15, 9, 4, 0, 7); ctx.fill();
+  ctx.fillStyle = '#E74C3C';                       // carrosserie
+  roundRect(-27, -10, 54, 18, 5); ctx.fill();
+  ctx.fillStyle = '#C0392B';                       // habitacle
+  roundRect(-13, -21, 26, 13, 4); ctx.fill();
+  ctx.fillStyle = '#AEDDF5';                       // vitre
+  roundRect(-9, -18, 18, 8, 3); ctx.fill();
+  ctx.fillStyle = '#F7CA18';                       // phare
+  ctx.fillRect(22, -7, 5, 5);
+  ctx.restore();
+}
+
+/* =====================================================================
+   11. HUD (indicateurs permanents)
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+function updateHUD() {
+  if (!game.lv) return;
+  $('hud-lives').textContent = '❤'.repeat(Math.max(0, game.lives)) +
+                               '🖤'.repeat(Math.max(0, 3 - game.lives));
+  $('hud-coins').textContent = game.coins;
+  $('hud-combo').textContent = game.mult > 1 ? ' ×' + game.mult : '';
+  $('hud-tier-v').textContent = 'P' + game.tier + ' · vmax ' + game.maxSpeed;
+  $('hud-dist').textContent = Math.max(0, Math.round((game.car.x - 120) / 20));
+  $('hud-speed').textContent = Math.round(Math.abs(game.car.vx) / 3);
+  $('hud-time').textContent = fmtTime(game.time);
+  $('hud-best').textContent = bestOf(game.li).score;
+}
+
+/* =====================================================================
+   12. MENU DE SÉLECTION DE NIVEAU
+   ===================================================================== */
+function renderMenu() {
+  const wrap = $('levels');
+  wrap.innerHTML = '';
+  let totalStars = 0;
+  LEVELS.forEach((lv, i) => {
+    const locked = i + 1 > save.unlocked;
+    const b = bestOf(i);
+    totalStars += b.stars;
+    const btn = document.createElement('button');
+    btn.className = 'lvl' + (locked ? ' locked' : '');
+    btn.style.background = lv.pal.ground;
+    btn.innerHTML =
+      '<span class="swatch" style="background:' + lv.pal.sky + '"></span>' +
+      (locked ? '🔒 ' : '') + lv.name +
+      '<span class="st">' + (locked ? '' : '★'.repeat(b.stars) + '<span style="color:#ccc">' + '★'.repeat(3 - b.stars) + '</span>') + '</span>' +
+      (locked ? '' : '<span class="best">Record : ' + b.score + '</span>');
+    if (!locked) btn.addEventListener('click', () => resetLevel(i));
+    wrap.appendChild(btn);
+  });
+  let total = document.getElementById('menu-stars');
+  if (!total) {
+    total = document.createElement('p');
+    total.id = 'menu-stars';
+    total.className = 'sub';
+    wrap.after(total);
+  }
+  total.textContent = '⭐ ' + totalStars + ' / ' + (LEVELS.length * 3) + ' étoiles';
+}
+
+/* =====================================================================
+   13. ENTRÉES (clavier + tactile)
+   ===================================================================== */
+const input = { left: false, right: false };
+const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowright' || k === 'd') input.right = true;
+  if (k === 'arrowleft'  || k === 'a') input.left = true;
+  if (k === 'r' && game.state !== 'menu') resetLevel(game.li);
+  if (['arrowleft','arrowright','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+});
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'arrowright' || k === 'd') input.right = false;
+  if (k === 'arrowleft'  || k === 'a') input.left = false;
+});
+window.addEventListener('blur', () => { input.left = input.right = false; });
+
+function bindTouch(id, key) {
+  const el = $(id);
+  const on  = e => { e.preventDefault(); input[key] = true; };
+  const off = e => { e.preventDefault(); input[key] = false; };
+  el.addEventListener('pointerdown', on);
+  el.addEventListener('pointerup', off);
+  el.addEventListener('pointercancel', off);
+  el.addEventListener('pointerleave', off);
+}
+bindTouch('btn-left', 'left');
+bindTouch('btn-right', 'right');
+
+$('btn-menu').addEventListener('click', goMenu);
+$('overlay').addEventListener('click', e => {
+  const act = e.target.dataset && e.target.dataset.act;
+  if (!act) return;
+  if (act === 'retry') resetLevel(game.li);
+  else if (act === 'next') resetLevel(Math.min(LEVELS.length - 1, game.li + 1));
+  else goMenu();
+});
+
+function goMenu() {
+  game.state = 'menu';
+  document.body.className = '';
+  $('overlay').classList.remove('show');
+  $('menu').classList.add('show');
+  renderMenu();
+}
+
+/* =====================================================================
+   14. BOUCLE DE JEU
+   ===================================================================== */
+let last = performance.now(), acc = 0;
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  if (game.state === 'play') {
+    game.time += dt;
+    acc += dt;
+    while (acc >= STEP) {              // physique à pas fixe
+      updateCar(STEP);
+      if (game.state !== 'play') { acc = 0; break; }
+      updateObjects(STEP);
+      acc -= STEP;
+    }
+    /* Caméra : suit la voiture avec un léger retard */
+    const c = game.car;
+    const tx = clamp(c.x - viewW * 0.35, 0, Math.max(0, game.lv.length - viewW));
+    const ty = clamp(c.y - VIEW_H * 0.6,
+                     game.lv.minY - VIEW_H * 0.45,
+                     game.lv.maxY - VIEW_H * 0.88);
+    game.cam.x += (tx - game.cam.x) * Math.min(1, 8 * dt);
+    game.cam.y += (ty - game.cam.y) * Math.min(1, 5 * dt);
+    game.cam.x = Math.max(0, game.cam.x);
+    updateHUD();
+  }
+
+  render();
+  requestAnimationFrame(frame);
+}
+
+renderMenu();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
